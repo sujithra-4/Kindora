@@ -71,15 +71,11 @@ export default function DonorDashboard() {
     const socket = io(socketUrl, { transports: ["websocket"] });
     socketRef.current = socket;
 
-    socket.on("donationUpdated", payload => {
+    const refreshMine = async payload => {
       const donorId = typeof payload.donor === "string" ? payload.donor : payload.donor?._id;
       if (donorId !== user._id) return;
 
-      setList(prev => {
-        const existing = prev.find(item => item._id === payload._id);
-        if (!existing) return prev;
-        return prev.map(item => (item._id === payload._id ? { ...item, ...payload } : item));
-      });
+      await load();
 
       setLiveEvents(prev => [
         {
@@ -90,6 +86,10 @@ export default function DonorDashboard() {
         },
         ...prev.slice(0, 5)
       ]);
+    };
+
+    socket.on("donationUpdated", payload => {
+      refreshMine(payload);
     });
 
     return () => {

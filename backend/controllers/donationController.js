@@ -49,6 +49,13 @@ async function notifyAllNgos(io, donation) {
   });
 }
 
+async function emitDonationUpdated(app, donationId) {
+  const donation = await Donation.findById(donationId).populate("donor", "name phone").populate("acceptedBy", "name");
+  if (!donation) return null;
+  app.get("io").emit("donationUpdated", donation);
+  return donation;
+}
+
 exports.createDonation = async (req, res) => {
   const { title, foodType, quantity, cookedTime, expiryTime, latitude, longitude, description, address } =
     req.body;
@@ -68,10 +75,12 @@ exports.createDonation = async (req, res) => {
     location: { type: "Point", coordinates: [Number(longitude), Number(latitude)] }
   });
 
-  req.app.get("io").emit("newDonation", donation);
+  const fullDonation = await Donation.findById(donation._id).populate("donor", "name phone").populate("acceptedBy", "name");
+
+  req.app.get("io").emit("newDonation", fullDonation);
   await notifyAllNgos(req.app.get("io"), donation);
   await notifyNearbyNgos(req.app.get("io"), donation);
-  return res.status(201).json(donation);
+  return res.status(201).json(fullDonation);
 };
 
 exports.getNearbyDonations = async (req, res) => {
@@ -121,8 +130,8 @@ exports.acceptDonation = async (req, res) => {
   donation.status = "accepted";
   donation.acceptedBy = req.user._id;
   await donation.save();
-  req.app.get("io").emit("donationUpdated", donation);
-  return res.json(donation);
+  const updatedDonation = await emitDonationUpdated(req.app, donation._id);
+  return res.json(updatedDonation);
 };
 
 exports.updateStatus = async (req, res) => {
@@ -141,8 +150,8 @@ exports.updateStatus = async (req, res) => {
   }
   donation.status = status;
   await donation.save();
-  req.app.get("io").emit("donationUpdated", donation);
-  return res.json(donation);
+  const updatedDonation = await emitDonationUpdated(req.app, donation._id);
+  return res.json(updatedDonation);
 };
 
 exports.getMine = async (req, res) => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import { Link } from "react-router-dom";
 import { useAuth } from "../services/AuthContext";
 import { api } from "../services/api";
@@ -47,26 +48,39 @@ export default function HomePage() {
   const dashboardPath = user?.role === "ngo" ? "/ngo" : "/donor";
   const [availableDonations, setAvailableDonations] = useState([]);
   const [loadingDonations, setLoadingDonations] = useState(true);
+  const socketUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "");
+
+  const loadAvailableDonations = async active => {
+    try {
+      const { data } = await api.get("/donations/public");
+      if (active()) setAvailableDonations(Array.isArray(data) ? data : []);
+    } catch (_err) {
+      if (active()) setAvailableDonations([]);
+    } finally {
+      if (active()) setLoadingDonations(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
 
-    const loadAvailableDonations = async () => {
-      try {
-        const { data } = await api.get("/donations/public");
-        if (active) setAvailableDonations(Array.isArray(data) ? data : []);
-      } catch (_err) {
-        if (active) setAvailableDonations([]);
-      } finally {
-        if (active) setLoadingDonations(false);
-      }
-    };
-
-    loadAvailableDonations();
+    loadAvailableDonations(() => active);
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const socket = io(socketUrl, { transports: ["websocket"] });
+    const refreshPublicList = () => loadAvailableDonations(() => true);
+
+    socket.on("newDonation", refreshPublicList);
+    socket.on("donationUpdated", refreshPublicList);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [socketUrl]);
 
   const formatExpiry = value => {
     const hoursLeft = Math.max(0, Math.round((new Date(value).getTime() - Date.now()) / 3600000));

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { io } from "socket.io-client";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
+import { useAuth } from "../services/AuthContext";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -8,19 +10,39 @@ function formatDateTime(value) {
 }
 
 export default function DonorHistoryPage() {
+  const { user } = useAuth();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const load = async () => {
+    try {
+      const { data } = await api.get("/donations/mine");
+      setList(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/donations/mine");
-        setList(data);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    load();
   }, []);
+
+  const socketUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "");
+
+  useEffect(() => {
+    if (!user?._id) return;
+
+    const socket = io(socketUrl, { transports: ["websocket"] });
+    socket.on("donationUpdated", payload => {
+      const donorId = typeof payload.donor === "string" ? payload.donor : payload.donor?._id;
+      if (donorId !== user._id) return;
+      load();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [socketUrl, user?._id]);
 
   const history = useMemo(
     () => list.filter(item => ["delivered", "cancelled"].includes(item.status)),
