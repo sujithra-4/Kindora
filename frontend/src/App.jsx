@@ -48,12 +48,6 @@ function Private({ roles, children }) {
   return children;
 }
 
-function HomeRedirect() {
-  const { user } = useAuth();
-  if (!user) return <HomePage />;
-  return <Navigate to={user.role === "ngo" ? "/ngo" : "/donor"} replace />;
-}
-
 function PublicOnly({ children }) {
   const { user } = useAuth();
   if (user) return <Navigate to={user.role === "ngo" ? "/ngo" : "/donor"} replace />;
@@ -66,7 +60,7 @@ function AppRoutes() {
       <Navbar />
       <main className="container">
         <Routes>
-          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/" element={<HomePage />} />
           <Route
             path="/login"
             element={
